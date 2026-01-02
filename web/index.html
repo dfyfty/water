@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>水质监测实时数据</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f5f5f5;
+      color: #222;
+    }
+    header {
+      background: #1976d2;
+      color: #fff;
+      padding: 12px 16px;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 18px;
+    }
+    main {
+      padding: 16px;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    section {
+      background: #fff;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      padding: 12px 16px;
+      margin-bottom: 16px;
+    }
+    h2 {
+      font-size: 16px;
+      margin: 0 0 8px;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    button {
+      border-radius: 4px;
+      border: 1px solid #1976d2;
+      background: #1976d2;
+      color: #fff;
+      padding: 6px 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #fff;
+      color: #1976d2;
+    }
+    button:disabled {
+      opacity: .5;
+      cursor: default;
+    }
+    label {
+      font-size: 13px;
+      color: #555;
+    }
+    input, select {
+      padding: 4px 6px;
+      font-size: 13px;
+    }
+    #status {
+      font-size: 13px;
+      color: #555;
+      margin-top: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 4px 6px;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+      white-space: nowrap;
+    }
+    th {
+      background: #fafafa;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+    #log-container {
+      max-height: 320px;
+      overflow: auto;
+      border: 1px solid #eee;
+      border-radius: 4px;
+    }
+    #raw-log {
+      width: 100%;
+      height: 120px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+    }
+    #error {
+      color: #d32f2f;
+      font-size: 13px;
+      margin-top: 4px;
+    }
+    .pill {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: #eee;
+      color: #555;
+      margin-left: 6px;
+    }
+    @media (max-width: 640px) {
+      th, td {
+        font-size: 12px;
+      }
+      header h1 {
+        font-size: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>水质监测实时数据面板</h1>
+  </header>
+  <main>
+    <section>
+      <h2>连接设备</h2>
+      <div class="row">
+        <button id="connect-btn">连接串口</button>
+        <button id="disconnect-btn" class="secondary" disabled>断开</button>
+        <label>
+          波特率：
+          <input id="baudrate" type="number" value="115200" min="1200" step="1200">
+        </label>
+        <span class="pill" id="support-pill"></span>
+      </div>
+      <div id="status">状态：未连接</div>
+      <div id="error"></div>
+    </section>
+
+    <section>
+      <h2>实时数据</h2>
+      <div id="log-container">
+        <table>
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>原始数据行</th>
+            </tr>
+          </thead>
+          <tbody id="data-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>记录与导出</h2>
+      <div class="row" style="margin-bottom:8px">
+        <button id="clear-btn" class="secondary">清空记录</button>
+        <button id="download-btn">导出 CSV</button>
+        <span id="record-count" style="font-size:13px;color:#555">记录条数：0</span>
+      </div>
+      <label for="raw-log">最新原始数据（仅显示部分）：</label>
+      <textarea id="raw-log" readonly></textarea>
+    </section>
+  </main>
+
+  <script>
+    const connectBtn = document.getElementById('connect-btn');
+    const disconnectBtn = document.getElementById('disconnect-btn');
+    const statusEl = document.getElementById('status');
+    const errorEl = document.getElementById('error');
+    const supportPill = document.getElementById('support-pill');
+    const baudrateInput = document.getElementById('baudrate');
+    const dataBody = document.getElementById('data-body');
+    const rawLog = document.getElementById('raw-log');
+    const clearBtn = document.getElementById('clear-btn');
+    const downloadBtn = document.getElementById('download-btn');
+    const recordCountEl = document.getElementById('record-count');
+
+    let port = null;
+    let reader = null;
+    let keepReading = false;
+    const textDecoder = new TextDecoder();
+    let buffer = '';
+    const records = [];
+
+    function setStatus(text) {
+      statusEl.textContent = '状态：' + text;
+    }
+
+    function setError(text) {
+      errorEl.textContent = text || '';
+    }
+
+    function updateRecordCount() {
+      recordCountEl.textContent = '记录条数：' + records.length;
+    }
+
+    function appendLine(line) {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString();
+      const tr = document.createElement('tr');
+      const tdTime = document.createElement('td');
+      const tdRaw = document.createElement('td');
+      tdTime.textContent = timeStr;
+      tdRaw.textContent = line;
+      tr.appendChild(tdTime);
+      tr.appendChild(tdRaw);
+      dataBody.appendChild(tr);
+      if (dataBody.parentElement && dataBody.parentElement.parentElement) {
+        const container = document.getElementById('log-container');
+        container.scrollTop = container.scrollHeight;
+      }
+      records.push({
+        timestamp: now.toISOString(),
+        raw: line
+      });
+      updateRecordCount();
+      const current = rawLog.value.split('\n');
+      current.push(line);
+      while (current.length > 50) current.shift();
+      rawLog.value = current.join('\n');
+      rawLog.scrollTop = rawLog.scrollHeight;
+    }
+
+    async function readLoop() {
+      if (!port) return;
+      keepReading = true;
+      const stream = port.readable;
+      if (!stream) return;
+      reader = stream.getReader();
+      try {
+        while (keepReading) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) {
+            const chunk = textDecoder.decode(value);
+            buffer += chunk;
+            let idx;
+            while ((idx = buffer.indexOf('\n')) >= 0) {
+              let line = buffer.slice(0, idx);
+              buffer = buffer.slice(idx + 1);
+              line = line.replace(/\r$/, '');
+              if (line.trim().length > 0) {
+                appendLine(line.trim());
+              }
+            }
+          }
+        }
+      } catch (e) {
+        setError('读取错误：' + e.message);
+      } finally {
+        if (reader) {
+          try {
+            await reader.cancel();
+          } catch (_) {}
+          reader.releaseLock();
+          reader = null;
+        }
+      }
+    }
+
+    async function connectSerial() {
+      setError('');
+      if (!('serial' in navigator)) {
+        setError('当前浏览器不支持 Web Serial API，请使用最新版 Chrome/Edge。');
+        return;
+      }
+      try {
+        const baudRate = parseInt(baudrateInput.value, 10) || 115200;
+        port = await navigator.serial.requestPort({});
+        await port.open({ baudRate });
+        setStatus('已连接，波特率 ' + baudRate);
+        connectBtn.disabled = true;
+        disconnectBtn.disabled = false;
+        readLoop();
+      } catch (e) {
+        setError('连接失败：' + e.message);
+        setStatus('未连接');
+        port = null;
+      }
+    }
+
+    async function disconnectSerial() {
+      setError('');
+      keepReading = false;
+      if (reader) {
+        try {
+          await reader.cancel();
+        } catch (_) {}
+        reader = null;
+      }
+      if (port) {
+        try {
+          await port.close();
+        } catch (_) {}
+        port = null;
+      }
+      setStatus('未连接');
+      connectBtn.disabled = false;
+      disconnectBtn.disabled = true;
+    }
+
+    function clearRecords() {
+      records.length = 0;
+      while (dataBody.firstChild) dataBody.removeChild(dataBody.firstChild);
+      rawLog.value = '';
+      updateRecordCount();
+    }
+
+    function downloadCSV() {
+      if (!records.length) {
+        alert('没有记录可以导出。');
+        return;
+      }
+      const header = ['timestamp', 'raw'];
+      const lines = [header.join(',')];
+      for (const r of records) {
+        const row = [
+          r.timestamp,
+          '"' + (r.raw || '').replace(/"/g, '""') + '"'
+        ];
+        lines.push(row.join(','));
+      }
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const now = new Date();
+      const name = 'ph_log_' + now.toISOString().replace(/[:.]/g, '-') + '.csv';
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    connectBtn.addEventListener('click', connectSerial);
+    disconnectBtn.addEventListener('click', disconnectSerial);
+    clearBtn.addEventListener('click', clearRecords);
+    downloadBtn.addEventListener('click', downloadCSV);
+    window.addEventListener('beforeunload', () => {
+      keepReading = false;
+      if (port && port.close) {
+        port.close();
+      }
+    });
+
+    if ('serial' in navigator) {
+      supportPill.textContent = '浏览器已支持 Web Serial';
+      supportPill.style.background = '#e3f2fd';
+      supportPill.style.color = '#1976d2';
+    } else {
+      supportPill.textContent = '浏览器不支持 Web Serial';
+      supportPill.style.background = '#ffebee';
+      supportPill.style.color = '#d32f2f';
+    }
+    updateRecordCount();
+  </script>
+</body>
+</html>
+
