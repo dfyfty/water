@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>水质上位机监控界面</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #f6f4f0;
+      --panel: #ffffff;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --accent: #0f766e;
+      --accent-2: #f97316;
+      --shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Source Han Sans SC", "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(180deg, #fef3c7 0%, var(--bg) 35%, #e0f2fe 100%);
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 24px 6vw 10px;
+    }
+
+    header h1 {
+      margin: 0 0 6px;
+      font-size: 24px;
+      letter-spacing: 0.5px;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    main {
+      padding: 12px 6vw 36px;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 18px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+    }
+
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+    label { font-size: 12px; color: var(--muted); }
+
+    select, input {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 6px 8px;
+      font-size: 13px;
+      background: #fff;
+    }
+
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button.primary { background: var(--accent); color: #fff; }
+    button.secondary { background: #e5e7eb; color: #1f2937; }
+    button.warn { background: var(--accent-2); color: #fff; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .status {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: #f9fafb;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 18px;
+      color: var(--accent);
+      margin-top: 4px;
+    }
+
+    .chart {
+      width: 100%;
+      height: 220px;
+      border-radius: 10px;
+      border: 1px dashed var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 13px;
+      background: #f9fafb;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 6px 4px;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    th { background: #f3f4f6; position: sticky; top: 0; }
+
+    .table-wrap { max-height: 220px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+
+    .log {
+      width: 100%;
+      height: 90px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 6px;
+      font-family: "JetBrains Mono", "Fira Code", monospace;
+      font-size: 12px;
+      background: #0f172a;
+      color: #e2e8f0;
+      resize: none;
+    }
+
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>水质上位机监控界面</h1>
+    <p>串口采集 · 实时显示 · 曲线趋势 · 记录导出</p>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>连接与控制</h2>
+      <div class="row" style="margin-bottom:6px">
+        <label>串口</label>
+        <select>
+          <option>COM3</option>
+          <option>COM5</option>
+          <option>/dev/ttyUSB0</option>
+        </select>
+        <label>波特率</label>
+        <select>
+          <option>9600</option>
+          <option selected>115200</option>
+          <option>256000</option>
+        </select>
+      </div>
+      <div class="row">
+        <button class="primary">连接</button>
+        <button class="secondary">断开</button>
+        <button class="warn">模拟数据</button>
+      </div>
+      <div class="status">状态：未连接 | 数据间隔：1s | 保存路径：./data/logs/</div>
+    </section>
+
+    <section class="panel">
+      <h2>实时参数</h2>
+      <div class="metrics">
+        <div class="metric">
+          <div>pH</div>
+          <strong>7.20</strong>
+          <small>范围 6.5 - 8.5</small>
+        </div>
+        <div class="metric">
+          <div>溶氧 (mg/L)</div>
+          <strong>6.40</strong>
+          <small>范围 3 - 9</small>
+        </div>
+        <div class="metric">
+          <div>浊度 (NTU)</div>
+          <strong>4.10</strong>
+          <small>范围 0 - 20</small>
+        </div>
+        <div class="metric">
+          <div>温度 (°C)</div>
+          <strong>24.8</strong>
+          <small>范围 10 - 35</small>
+        </div>
+        <div class="metric">
+          <div>电导率 (uS/cm)</div>
+          <strong>420</strong>
+          <small>范围 100 - 900</small>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>趋势曲线</h2>
+      <div class="chart">此处显示 Matplotlib 实时趋势曲线</div>
+    </section>
+
+    <section class="panel">
+      <h2>数据记录与导出</h2>
+      <div class="row" style="margin-bottom:8px">
+        <button class="secondary">清空记录</button>
+        <button class="primary">导出 CSV</button>
+        <span style="font-size:12px;color:var(--muted)">记录条数：128</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>pH</th>
+              <th>溶氧</th>
+              <th>浊度</th>
+              <th>温度</th>
+              <th>电导率</th>
+              <th>原始帧</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>12:01:03</td>
+              <td>7.20</td>
+              <td>6.40</td>
+              <td>4.10</td>
+              <td>24.8</td>
+              <td>420</td>
+              <td>PH:7.20,DO:6.40,T:24.8</td>
+            </tr>
+            <tr>
+              <td>12:01:04</td>
+              <td>7.21</td>
+              <td>6.35</td>
+              <td>4.05</td>
+              <td>24.9</td>
+              <td>418</td>
+              <td>PH:7.21,DO:6.35,T:24.9</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:10px">
+        <label>原始数据缓冲（最近 8 行）</label>
+        <textarea class="log" readonly>PH:7.20,DO:6.40,T:24.8
+PH:7.21,DO:6.35,T:24.9
+PH:7.18,DO:6.38,T:24.7</textarea>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

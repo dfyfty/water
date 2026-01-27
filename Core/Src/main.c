@@ -197,7 +197,7 @@ int main(void)
 
   /* 初始化 DS18B20 温度传感器，数据脚接在 PB6 */
   uint8_t ds18b20_ok = DS18B20_Init();
-  if (!ds18b20_ok)
+  if (ds18b20_ok != 0U)
   {
     /* 如果初始化失败，OLED 上提示一下，但不中断主程序 */
     OLED_PrintLarge(0, 0, "TEMP ERR");
